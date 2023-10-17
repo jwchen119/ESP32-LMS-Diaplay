@@ -9,18 +9,6 @@
 ///////////////////// VARIABLES ////////////////////
 
 
-// SCREEN: ui_Screen2
-void ui_Screen2_screen_init(void);
-lv_obj_t *ui_Screen2;
-lv_obj_t *ui_Label6;
-lv_obj_t *ui_Label7;
-lv_obj_t *ui_Label8;
-lv_obj_t *ui_Label9;
-lv_obj_t *ui_Label10;
-lv_obj_t *ui_Label11;
-lv_obj_t *ui_Label12;
-
-
 // SCREEN: ui_Screen1
 void ui_Screen1_screen_init(void);
 lv_obj_t *ui_Screen1;
@@ -33,12 +21,37 @@ lv_obj_t *ui_Label4;
 lv_obj_t *ui_Label5;
 
 
+// SCREEN: ui_Screen2
+void ui_Screen2_screen_init(void);
+lv_obj_t *ui_Screen2;
+lv_obj_t *ui_Label6;
+lv_obj_t *ui_Label7;
+lv_obj_t *ui_Label8;
+lv_obj_t *ui_Label9;
+lv_obj_t *ui_Label10;
+lv_obj_t *ui_Label11;
+lv_obj_t *ui_Label12;
+
+
 // SCREEN: ui_Screen3
 void ui_Screen3_screen_init(void);
 lv_obj_t *ui_Screen3;
 lv_obj_t *ui_Image1;
 lv_obj_t *ui_Label13;
+
+
+// SCREEN: ui_Screen4
+void ui_Screen4_screen_init(void);
+lv_obj_t *ui_Screen4;
+lv_obj_t *ui_Label15;
+lv_obj_t *ui_Label14;
+lv_obj_t *ui_Label16;
+lv_obj_t *ui_Image3;
+void ui_event_Button1( lv_event_t * e);
+lv_obj_t *ui_Button1;
+lv_obj_t *ui_Image4;
 lv_obj_t *ui____initial_actions0;
+const lv_img_dsc_t *ui_imgset_121077206[1] = {&ui_img_777132237};
 const lv_img_dsc_t *ui_imgset_970801699[1] = {&ui_img_1073469376};
 
 ///////////////////// TEST LVGL SETTINGS ////////////////////
@@ -52,6 +65,12 @@ const lv_img_dsc_t *ui_imgset_970801699[1] = {&ui_img_1073469376};
 ///////////////////// ANIMATIONS ////////////////////
 
 ///////////////////// FUNCTIONS ////////////////////
+void ui_event_Button1( lv_event_t * e) {
+    lv_event_code_t event_code = lv_event_get_code(e);lv_obj_t * target = lv_event_get_target(e);
+if ( event_code == LV_EVENT_PRESSED) {
+      _ui_screen_change( &ui_Screen1, LV_SCR_LOAD_ANIM_NONE, 0, 0, &ui_Screen1_screen_init);
+}
+}
 
 ///////////////////// SCREENS ////////////////////
 
@@ -60,9 +79,10 @@ void ui_init( void )
 lv_disp_t *dispp = lv_disp_get_default();
 lv_theme_t *theme = lv_theme_default_init(dispp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED), true, LV_FONT_DEFAULT);
 lv_disp_set_theme(dispp, theme);
-ui_Screen2_screen_init();
 ui_Screen1_screen_init();
+ui_Screen2_screen_init();
 ui_Screen3_screen_init();
+ui_Screen4_screen_init();
 ui____initial_actions0 = lv_obj_create(NULL);
-lv_disp_load_scr( ui_Screen2);
+lv_disp_load_scr( ui_Screen1);
 }

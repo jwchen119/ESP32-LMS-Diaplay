@@ -24,16 +24,6 @@ extern "C" {
 
 #include "ui_helpers.h"
 #include "ui_events.h"
-// SCREEN: ui_Screen2
-void ui_Screen2_screen_init(void);
-extern lv_obj_t *ui_Screen2;
-extern lv_obj_t *ui_Label6;
-extern lv_obj_t *ui_Label7;
-extern lv_obj_t *ui_Label8;
-extern lv_obj_t *ui_Label9;
-extern lv_obj_t *ui_Label10;
-extern lv_obj_t *ui_Label11;
-extern lv_obj_t *ui_Label12;
 // SCREEN: ui_Screen1
 void ui_Screen1_screen_init(void);
 extern lv_obj_t *ui_Screen1;
@@ -44,14 +34,37 @@ extern lv_obj_t *ui_Label3;
 extern lv_obj_t *ui_Arc2;
 extern lv_obj_t *ui_Label4;
 extern lv_obj_t *ui_Label5;
+// SCREEN: ui_Screen2
+void ui_Screen2_screen_init(void);
+extern lv_obj_t *ui_Screen2;
+extern lv_obj_t *ui_Label6;
+extern lv_obj_t *ui_Label7;
+extern lv_obj_t *ui_Label8;
+extern lv_obj_t *ui_Label9;
+extern lv_obj_t *ui_Label10;
+extern lv_obj_t *ui_Label11;
+extern lv_obj_t *ui_Label12;
 // SCREEN: ui_Screen3
 void ui_Screen3_screen_init(void);
 extern lv_obj_t *ui_Screen3;
 extern lv_obj_t *ui_Image1;
 extern lv_obj_t *ui_Label13;
+// SCREEN: ui_Screen4
+void ui_Screen4_screen_init(void);
+extern lv_obj_t *ui_Screen4;
+extern lv_obj_t *ui_Label15;
+extern lv_obj_t *ui_Label14;
+extern lv_obj_t *ui_Label16;
+extern lv_obj_t *ui_Image3;
+void ui_event_Button1( lv_event_t * e);
+extern lv_obj_t *ui_Button1;
+extern lv_obj_t *ui_Image4;
 extern lv_obj_t *ui____initial_actions0;
 
 LV_IMG_DECLARE( ui_img_1968846774);   // assets\warning-sign-9763 (1).png
+LV_IMG_DECLARE( ui_img_512126512);   // assets\cogwheel (1).png
+LV_IMG_DECLARE( ui_img_970937424);   // assets\return (1).png
+LV_IMG_DECLARE( ui_img_777132237);   // assets\settings-icon-14952.png
 LV_IMG_DECLARE( ui_img_1073469376);   // assets\warning-sign-9763.png
 
 LV_FONT_DECLARE( ui_font_fontHEI14);

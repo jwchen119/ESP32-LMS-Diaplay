@@ -15,10 +15,18 @@
 #include <freertos/task.h>
 #include <WiFiManager.h>
 #include <RotaryEncoder.h>
+#include <Button2.h>
 
 #define PIN_IN1 25
 #define PIN_IN2 26
 RotaryEncoder encoder(PIN_IN1, PIN_IN2, RotaryEncoder::LatchMode::TWO03);
+
+#define confirm_PIN 32
+
+Button2 confirmBtn;
+
+bool settingMode = false;
+// int click = 10;
 
 const int discoveryPort = 3483;
 
@@ -29,12 +37,13 @@ Preferences preferences;
 String jsonBuffer;
 WiFiManager wm;
 
+int sleep_threhold; // 目前定義為進入檢查頻率的次數，與interval有相對關係
+int sleep_btn = 0;
+bool deepSleep = false;
+
 unsigned long previousMillis = 0;
 unsigned long interval = 1000;
 unsigned long currentMillis;
-int sleep_threhold = 10; // 目前定義為進入檢查頻率的次數，與interval有相對關係
-int sleep_btn = 0;
-bool deepSleep = false;
 
 char autoConnectSSID[] = "ESP32_LMS_DISPLAY";
 char autoConnectPW[] = "sfhes23452h";
@@ -44,6 +53,7 @@ static lv_group_t *lv_group;
 
 static lv_disp_draw_buf_t draw_buf;
 static lv_color_t *disp_draw_buf;
+char *currentScreen;
 
 String lmsPlayer = "";
 String displayPlayer = "";
@@ -88,6 +98,18 @@ String lmsVolume = "[\"mixer\",\"volume\",\"<i>\"]";
 // String lmsPlayNumberSong = "[\"playlist\",\"index\",\"" + ListNumber + "\"]";
 // String lmsThisSong = "[\"playlist\",\"index\",\"+0\"]";
 
+const char *rollerSleepOptions[] = {"10 Sec", "20 Sec", "30 Sec", "40 Sec", "50 Sec", "60 Sec", "Never"};
+const size_t numSleepOptions = sizeof(rollerSleepOptions) / sizeof(rollerSleepOptions[0]);
+// const int rollerSleepValues[] = {10, 20, 30, 40, 50, 60, 0};
+
+const char *rollerReserved1Options[] = {"On", "Off"};
+const size_t numReserved1Options = sizeof(rollerReserved1Options) / sizeof(rollerReserved1Options[0]);
+// const int rollerReserved1Values[] = {0, 1};
+
+const char *rollerReserved2Options[] = {"A", "B", "C"};
+const size_t numReserved2Options = sizeof(rollerReserved2Options) / sizeof(rollerReserved2Options[0]);
+// const int rollerReserved2Values[] = {0, 1, 2};
+
 void Check_Regular();
 void Get_Number_of_Players(void);
 void Update_Players(void);
@@ -98,7 +120,74 @@ bool SendCommand(String url, String command);
 String extractName(byte *data, int length);
 int extractPort(byte *data, int length);
 bool serverDiscovery();
+void longClickBtn(Button2 &btn);
+void clickBtn(Button2 &btn);
+String generateOptionsString();
+static void roller1EventHandler(lv_event_t *e);
 // void serverStatus(void);
+
+static void roller1EventHandler(lv_event_t *e)
+{
+  lv_obj_t *obj = lv_event_get_target(e);
+  char buff[32];
+  lv_roller_get_selected_str(obj, buff, sizeof(buff));
+  int rollerIdx = lv_roller_get_selected(obj);
+  Serial.println(buff);
+  Serial.println(rollerIdx);
+  preferences.begin("LMS_setting", false);
+  preferences.putInt("sleepSetting", rollerIdx);
+  preferences.end();
+}
+static void roller2EventHandler(lv_event_t *e)
+{
+  lv_obj_t *obj = lv_event_get_target(e);
+  char buff[32];
+  lv_roller_get_selected_str(obj, buff, sizeof(buff));
+  int rollerIdx = lv_roller_get_selected(obj);
+  Serial.println(buff);
+  Serial.println(rollerIdx);
+  preferences.begin("LMS_setting", false);
+  preferences.putInt("resvered1", rollerIdx);
+  preferences.end();
+}
+static void roller3EventHandler(lv_event_t *e)
+{
+  lv_obj_t *obj = lv_event_get_target(e);
+  char buff[32];
+  lv_roller_get_selected_str(obj, buff, sizeof(buff));
+  int rollerIdx = lv_roller_get_selected(obj);
+  Serial.println(buff);
+  Serial.println(rollerIdx);
+  preferences.begin("LMS_setting", false);
+  preferences.putInt("resvered2", rollerIdx);
+  preferences.end();
+}
+
+String generateOptionsString(const char *options[], size_t numOptions)
+{
+  String optionsString;
+  for (size_t i = 0; i < numOptions; i++)
+  {
+    optionsString += options[i];
+    if (i < numOptions - 1)
+    {
+      optionsString += "\n";
+    }
+  }
+  return optionsString;
+}
+
+void clickBtn(Button2 &btn)
+{
+  ;
+}
+
+void longClickBtn(Button2 &btn)
+{
+  Serial.println("long click detected");
+  settingMode = false;
+  lv_disp_load_scr(ui_Screen4);
+}
 
 bool serverDiscovery()
 {
@@ -202,6 +291,7 @@ String extractName(byte *data, int length)
 void configModeCallback(WiFiManager *myWiFiManager)
 {
   // Serial.println("Entered config mode");
+  tft.fillScreen(TFT_BLACK);
   char const *data;
   String dataString = "WIFI:S:" + String(autoConnectSSID) + ";T:WPA;P:" + String(autoConnectPW) + ";;";
   data = dataString.c_str();
@@ -533,7 +623,8 @@ void encoder_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
   int btn = 0;
   int count = (int)(encoder.getDirection());
 
-  if (digitalRead(32) == 0) // encoder button
+  // if (digitalRead(32) == 0) // encoder button
+  if (confirmBtn.isPressed())
   {
     sleep_btn = 0;
     Get_Number_of_Players();
@@ -562,6 +653,12 @@ void encoder_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
   if (count != 0)
   {
     sleep_btn = 0;
+    // if (count > 0) {
+    //   encoder_act = LV_INDEV_STATE_PR; // pressed
+    // } else {
+    //   encoder_act = LV_INDEV_STATE_PR; // pressed
+    // }
+    // data->enc_diff = enc_get_new_moves();
 
     volumen_lvgl = min<int>(max<int>(volumen_lvgl + count, 0), 100);
     lv_arc_set_value(ui_Arc1, volumen_lvgl);
@@ -613,10 +710,9 @@ void encoder_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
   //   but_flag = true;
   // }
 
-  // data->enc_diff = encoder_diff;
+  data->enc_diff = count;
   data->state = encoder_act;
   // encoder_diff = 0;
-  btn = 0;
   /*Return `false` because we are not buffering and no more data to read*/
   // return false;
 }
@@ -641,13 +737,19 @@ void init_lv_group()
   }
 }
 
+lv_obj_t *roller1, *roller2, *roller3;
+
 void setup()
 {
   Serial.begin(115200);
   // setCpuFrequencyMhz(240);
   // pinMode(26, INPUT_PULLUP);
   // pinMode(25, INPUT_PULLUP);
-  pinMode(32, INPUT_PULLUP);
+  // pinMode(32, INPUT_PULLUP);
+  confirmBtn.begin(confirm_PIN);
+  confirmBtn.setLongClickDetectedHandler(longClickBtn);
+  confirmBtn.setTapHandler(clickBtn);
+  confirmBtn.setLongClickTime(1000);
   lv_init();
   // delay(500);
 
@@ -668,15 +770,79 @@ void setup()
   lv_indev_drv_init(&indev_drv);
   indev_drv.type = LV_INDEV_TYPE_ENCODER;
   indev_drv.read_cb = encoder_read;
+  // indev_drv.long_press_repeat_time = 100;
+  indev_drv.long_press_time = 1000;
   lv_indev_drv_register(&indev_drv);
   init_lv_group();
 
   ui_init();
 
+  String optionsString;
+  // String optionsString = generateOptionsString(rollerSleepOptions);
+  // Create roller1
+  optionsString = generateOptionsString(rollerSleepOptions, numSleepOptions);
+  roller1 = lv_roller_create(ui_Screen4);
+  lv_roller_set_options(roller1, optionsString.c_str(), LV_ROLLER_MODE_INFINITE);
+  lv_roller_set_visible_row_count(roller1, 1);
+  lv_obj_set_width(roller1, 48);
+  lv_obj_set_height(roller1, 18);
+  lv_obj_set_x(roller1, 29);
+  lv_obj_set_y(roller1, 5);
+  lv_obj_set_align(roller1, LV_ALIGN_CENTER);
+  lv_obj_set_style_text_font(roller1, &ui_font_fontHEI14, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_color(roller1, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(roller1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_border_color(roller1, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_border_opa(roller1, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_text_font(roller1, &ui_font_fontHEI14, LV_PART_SELECTED | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_color(roller1, lv_color_hex(0xFFFFFF), LV_PART_SELECTED | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(roller1, 0, LV_PART_SELECTED | LV_STATE_DEFAULT);
+  lv_obj_add_event_cb(roller1, roller1EventHandler, LV_EVENT_VALUE_CHANGED, NULL);
+
+  // Create roller2
+  optionsString = generateOptionsString(rollerReserved1Options, numReserved1Options);
+  roller2 = lv_roller_create(ui_Screen4);
+  lv_roller_set_options(roller2, optionsString.c_str(), LV_ROLLER_MODE_INFINITE);
+  lv_roller_set_visible_row_count(roller2, 1);
+  lv_obj_set_width(roller2, 32);
+  lv_obj_set_height(roller2, 18);
+  lv_obj_set_x(roller2, 22);
+  lv_obj_set_y(roller2, 30);
+  lv_obj_set_align(roller2, LV_ALIGN_CENTER);
+  lv_obj_set_style_text_font(roller2, &ui_font_fontHEI14, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_color(roller2, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(roller2, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_border_color(roller2, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_border_opa(roller2, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_text_font(roller2, &ui_font_fontHEI14, LV_PART_SELECTED | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_color(roller2, lv_color_hex(0xFFFFFF), LV_PART_SELECTED | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(roller2, 0, LV_PART_SELECTED | LV_STATE_DEFAULT);
+  lv_obj_add_event_cb(roller2, roller2EventHandler, LV_EVENT_VALUE_CHANGED, NULL);
+
+  // Create roller3
+  optionsString = generateOptionsString(rollerReserved2Options, numReserved2Options);
+  roller3 = lv_roller_create(ui_Screen4);
+  lv_roller_set_options(roller3, optionsString.c_str(), LV_ROLLER_MODE_INFINITE);
+  lv_roller_set_visible_row_count(roller3, 1);
+  lv_obj_set_width(roller3, 32);
+  lv_obj_set_height(roller3, 18);
+  lv_obj_set_x(roller3, 18);
+  lv_obj_set_y(roller3, 55);
+  lv_obj_set_align(roller3, LV_ALIGN_CENTER);
+  lv_obj_set_style_text_font(roller3, &ui_font_fontHEI14, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_color(roller3, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(roller3, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_border_color(roller3, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_border_opa(roller3, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_text_font(roller3, &ui_font_fontHEI14, LV_PART_SELECTED | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_color(roller3, lv_color_hex(0xFFFFFF), LV_PART_SELECTED | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(roller3, 0, LV_PART_SELECTED | LV_STATE_DEFAULT);
+  lv_obj_add_event_cb(roller3, roller3EventHandler, LV_EVENT_VALUE_CHANGED, NULL);
+
   tft.fillScreen(TFT_BLACK);
   tft.begin();
   // lv_obj_clean(lv_scr_act());
-  // tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(TFT_BLACK);
 
   // wm.resetSettings();
   wm.setAPCallback(configModeCallback);
@@ -721,6 +887,7 @@ void setup()
 
   preferences.begin("server_info", false);                  // opens storage space
   lmsPlayer = preferences.getString("last_player_id", "0"); // check if previous player
+  preferences.end();
 
   if (lmsPlayer == "0")
   {
@@ -751,7 +918,7 @@ void setup()
       if (lmsPlayer.equals(PlayerId[i]))
       {
         is_there_player = true;
-        Serial.print("Previous player found!");
+        Serial.println("Previous player found!");
         focus_player = i;
         // Serial.println(PlayerName[focus_player]);
         // Serial.println(PlayerId[focus_player]);
@@ -789,7 +956,134 @@ void setup()
   // esp_sleep_enable_ext1_wakeup(BIT64(GPIO_NUM_26) | BIT64(GPIO_NUM_25) | BIT64(GPIO_NUM_32), ESP_EXT1_WAKEUP_ANY_LOW);
   // Serial.println(PlayerName[focus_player]);
 
-  lv_disp_load_scr(ui_Screen1);
+  // if (digitalRead(32) == 0)
+  // {
+  //   Serial.println("Setting mode");
+  //   settingMode = true;
+
+  //   lv_disp_load_scr(ui_Screen4);
+  //   while (settingMode == true)
+  //   {
+  //     int count = (int)(encoder.getDirection());
+  //     encoder.tick();
+  //     confirmBtn.loop();
+  //     lv_timer_handler_run_in_period(5);
+  //     if (count != 0)
+  //     {
+  //       Serial.println(count);
+  //       if (click < 11 && count == -1)
+  //       {
+  //         // Serial.println("MIN");
+  //       }
+  //       else if (click > 59 && count == 1)
+  //       {
+  //         // lv_label_set_text(ui_Label15, "Never sleep");
+  //       }
+  //       else
+  //       {
+  //         // click = click + count;
+  //         // lv_label_set_text_fmt(ui_Label15, "Sleep: %d Sec", click);
+  //       }
+
+  //       // Serial.println("click");
+  //     }
+  //     // if (confirmBtn.isPressed())
+  //     // {
+  //     // click++;
+  //     // const char *clickChar = click;
+  //     // Serial.println("Clicked");
+  //     // lv_label_set_text_fmt(ui_Label16, "%d", click);
+  //     // }
+  //   }
+  // }
+
+  preferences.begin("LMS_setting", false);
+  int sleepThreholdOptions = preferences.getInt("sleepSetting", -1); // check if previous player
+  switch (sleepThreholdOptions)
+  {
+  case 0:
+    deepSleep = true;
+    lv_roller_set_selected(roller1, 0, LV_ANIM_OFF);
+    sleep_threhold = sleepThreholdOptions * 10;
+    break;
+  case 1:
+    deepSleep = true;
+    lv_roller_set_selected(roller1, 1, LV_ANIM_OFF);
+    sleep_threhold = sleepThreholdOptions * 20;
+    break;
+  case 2:
+    deepSleep = true;
+    lv_roller_set_selected(roller1, 2, LV_ANIM_OFF);
+    sleep_threhold = sleepThreholdOptions * 30;
+    break;
+  case 3:
+    deepSleep = true;
+    lv_roller_set_selected(roller1, 3, LV_ANIM_OFF);
+    sleep_threhold = sleepThreholdOptions * 40;
+    break;
+  case 4:
+    deepSleep = true;
+    lv_roller_set_selected(roller1, 4, LV_ANIM_OFF);
+    sleep_threhold = sleepThreholdOptions * 50;
+    break;
+  case 5:
+    deepSleep = true;
+    lv_roller_set_selected(roller1, 5, LV_ANIM_OFF);
+    sleep_threhold = sleepThreholdOptions * 60;
+    break;
+  case 6:
+    deepSleep = false;
+    lv_roller_set_selected(roller1, 6, LV_ANIM_OFF);
+    break;
+  default:
+    deepSleep = true;
+    lv_roller_set_selected(roller1, 0, LV_ANIM_OFF);
+    sleep_threhold = sleepThreholdOptions * 10;
+    break;
+  }
+
+  int resvered1Options = preferences.getInt("resvered1", -1); // check if previous player
+  switch (resvered1Options)
+  {
+  case 0:
+    lv_roller_set_selected(roller2, 0, LV_ANIM_OFF);
+    break;
+  case 1:
+    lv_roller_set_selected(roller2, 1, LV_ANIM_OFF);
+    break;
+  default:
+    lv_roller_set_selected(roller2, 0, LV_ANIM_OFF);
+    break;
+  }
+
+  int resvered2Options = preferences.getInt("resvered2", -1); // check if previous player
+  switch (resvered2Options)
+  {
+  case 0:
+    lv_roller_set_selected(roller3, 0, LV_ANIM_OFF);
+    break;
+  case 1:
+    lv_roller_set_selected(roller3, 1, LV_ANIM_OFF);
+    break;
+  case 2:
+    lv_roller_set_selected(roller3, 2, LV_ANIM_OFF);
+    break;
+  default:
+    lv_roller_set_selected(roller3, 0, LV_ANIM_OFF);
+    break;
+  }
+
+  preferences.end();
+
+  if (digitalRead(32) == 0)
+  {
+    Serial.println("Setting mode");
+    lv_disp_load_scr(ui_Screen4);
+  }
+  else
+  {
+    lv_disp_load_scr(ui_Screen1);
+  }
   // tft.fillScreen(TFT_BLACK);
   Serial.println("Done");
 }
@@ -813,4 +1107,5 @@ void loop()
   lv_timer_handler_run_in_period(5);
 
   encoder.tick();
+  confirmBtn.loop();
 }
